@@ -2,11 +2,49 @@ defmodule ComputationExpressions do
   defmacro __using__(opts) do
     {debug?, []} = Keyword.pop(opts, :debug, false)
     quote do
-      defmacro compute(do: {:__block__, _context, body}) do
-        unquote(__MODULE__).build(__MODULE__, body, __CALLER__)
+      defmacro compute(do: doo) do
+        body = unquote(__MODULE__).normalize_body(doo)
+        unquote(__MODULE__).root_build(__MODULE__, body, __CALLER__)
         |> case do x -> if unquote(debug?) do IO.puts(Macro.to_string(x)) end ; x end
       end
     end
+  end
+
+  defguard is_ce_form(x) when x in [
+    :let!,
+    :and!,
+    :do,
+    :yield,
+    :yield!,
+    :return,
+    :return!,
+    :match!,
+    # Other
+    :"\if",
+  ]
+
+  def normalize_body({:__block__, _context, body}) when is_list(body), do: body
+  def normalize_body({_, _ctxt, _} = body), do: [body]
+
+  def root_build(module, body, caller) do
+    built = build(module, body, caller)
+    case function_exported?(module, :delay, 1) do
+      false -> built
+      true ->
+        quote do
+          unquote(module).delay(fn -> unquote(built) end)
+        end
+    end
+  end
+
+  def build(_module, [], caller) do
+    kind = CompileError
+    opts = [
+      file: caller.file,
+      line: caller.line,
+      description: "Computation expression cannot be empty.",
+    ]
+    raise kind, opts
   end
 
   def build(_module, [{:let!, context, _}], caller) do
@@ -14,19 +52,70 @@ defmodule ComputationExpressions do
     opts = [
       file: caller.file,
       line: Keyword.get(context, :line, caller.line),
-      description: "End of computation expression cannot be let!",
+      description: "End of computation expression cannot be `let!`.",
     ]
     raise kind, opts
   end
 
-  def build(_module, [line], _caller) do
-    line
+  def build(module, [{:return, _ctxt, args}], _caller) do
+    quote do
+      unquote(module).return(unquote_splicing(args))
+    end
+  end
+
+  def build(module, [{:return!, _ctxt, args}], _caller) do
+    quote do
+      unquote(module).return_from(unquote_splicing(args))
+    end
+  end
+
+  def build(module, [{:yield, _ctxt, args}], _caller) do
+    quote do
+      unquote(module).yield(unquote_splicing(args))
+    end
+  end
+
+  def build(module, [{:yield!, _ctxt, args}], _caller) do
+    quote do
+      unquote(module).yield_from(unquote_splicing(args))
+    end
+  end
+
+  def build(module, [{:if, _ctxt, [cond, [{:do, cexpr}]]}], caller) do
+    built1 = build(module, normalize_body(cexpr), caller)
+    quote do
+      if unquote(cond) do unquote(built1) else unquote(module).zero() end
+    end
+  end
+
+  def build(module, [{:if, _ctxt, [cond, [{:do, cexpr}, {:else, cexpr2}]]}], caller) do
+    built1 = build(module, normalize_body(cexpr), caller)
+    built2 = build(module, normalize_body(cexpr2), caller)
+    quote do
+      if unquote(cond) do unquote(built1) else unquote(built2) end
+    end
+  end
+
+  def build(module, [line], _caller) do
+    quote do
+      unquote(line)
+      unquote(module).zero()
+    end
   end
 
   def build(module, [{:let!, _ctxt, [{:=, _ctxt2, [binding, expression]}]} | tail], caller) do
     quote location: :keep do
       unquote(expression)
       |> unquote(module).bind(fn unquote(binding) ->
+        unquote(build(module, tail, caller))
+      end)
+    end
+  end
+
+  def build(module, [{:do!, _ctxt, [expression]} | tail], caller) do
+    quote location: :keep do
+      unquote(expression)
+      |> unquote(module).bind(fn _ -> # Should be unit: {}
         unquote(build(module, tail, caller))
       end)
     end
@@ -39,13 +128,21 @@ defmodule ComputationExpressions do
     end
   end
 
-  def build(module, [expression | tail], caller) do
+  def build(module, [{ce_form1, _ctxt, _} = head | [{ce_form2, _ctxt2, _} | _] = tail], caller) when is_ce_form(ce_form1) and is_ce_form(ce_form2) do
+    built1 = build(module, [head], caller)
+    built2 = build(module, tail, caller)
     quote location: :keep do
-      unquote(expression)
-      |> unquote(module).bind(fn _ ->
-        unquote(build(module, tail, caller))
-      end)
+      unquote(module).combine(unquote(built1), unquote(module).delay(fn -> unquote(built2) end))
     end
-    #|> case do x -> IO.puts(Macro.to_string(x)) ; x end
   end
+
+  # T([ce1| ce2, V, C, q) = C(b.Combine({| ce1 |}0, b.Delay(fun () -> {| ce2 |}0)))
+
+  # def build(module, [line | tail], caller) do
+  #   built = build(module, tail, caller)
+  #   quote location: :keep do
+  #     unquote(line)
+  #     unquote(built)
+  #   end
+  # end
 end
