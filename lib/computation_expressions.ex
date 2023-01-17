@@ -1,10 +1,18 @@
 defmodule ComputationExpressions do
   defmacro __using__(opts) do
     {debug?, []} = Keyword.pop(opts, :debug, false)
+    #quote do
+    #  defmacro compute(do: doo) do
+    #    body = unquote(__MODULE__).normalize_body(doo)
+    #    unquote(__MODULE__).root_build(__MODULE__, body, __CALLER__)
+    #    |> case do x -> if unquote(debug?) do IO.puts(Macro.to_string(x)) end ; x end
+    #  end
+    #end
+
     quote do
       defmacro compute(do: doo) do
         body = unquote(__MODULE__).normalize_body(doo)
-        unquote(__MODULE__).root_build(__MODULE__, body, __CALLER__)
+        unquote(__MODULE__).Translation.comp_expr(body, __MODULE__)
         |> case do x -> if unquote(debug?) do IO.puts(Macro.to_string(x)) end ; x end
       end
     end
