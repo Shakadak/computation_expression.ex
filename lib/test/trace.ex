@@ -50,24 +50,42 @@ defmodule Test.Trace do
   end
 
   def combine(a, b) do
-    case {a, b} do
-      {some(a), some(b)} ->
-        _ = IO.puts("combining #{inspect(a)} and #{inspect(b)}")
-        some(a + b)
-      {some(a), none()} ->
-        _ = IO.puts("combining #{inspect(a)} and None")
-        some(a)
-      {none(), some(b)} ->
-        _ = IO.puts("combining None and #{inspect(b)}")
-        some(b)
-      {none(), none()} ->
-        _ = IO.puts("combining None with None")
-        none()
-    end
+    #case {a, b} do
+    #  {some(a), some(b)} ->
+    #    _ = IO.puts("combining #{inspect(a)} and #{inspect(b)}")
+    #    some(a + b)
+    #  {some(a), none()} ->
+    #    _ = IO.puts("combining #{inspect(a)} and None")
+    #    some(a)
+    #  {none(), some(b)} ->
+    #    _ = IO.puts("combining None and #{inspect(b)}")
+    #    some(b)
+    #  {none(), none()} ->
+    #    _ = IO.puts("combining None with None")
+    #    none()
+    #end
+    _ = IO.puts("Returning early with #{inspect(a)}. Ignoring second part: #{inspect(b)}.")
+    a
   end
 
-  def delay(f) do
-    _ = IO.puts("Delay")
-    f.()
+  def delay(funcToDelay) do
+    #_ = IO.puts("Delay")
+    #f.()
+    delayed = fn ->
+      IO.puts "#{inspect(funcToDelay)} - Starting Delayed Fn."
+      delayedResult = funcToDelay.()
+      IO.puts "#{inspect funcToDelay} - Finished Delayed Fn. Result is #{inspect delayedResult}"
+      delayedResult  # return the result
+    end
+
+    IO.puts "#{inspect funcToDelay} - Delaying using #{inspect delayed}"
+    delayed #/ return the new function
+  end
+
+  def run(funcToRun) do
+    IO.puts "#{inspect funcToRun} - Run Start."
+    runResult = funcToRun.()
+    IO.puts "#{inspect funcToRun} - Run End. Result is #{inspect runResult}"
+    runResult #/ return the result of running the delayed function
   end
 end

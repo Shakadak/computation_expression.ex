@@ -1,14 +1,17 @@
 defmodule ComputationExpressions.Translation do
   alias ComputationExpressions.Translation.Auxiliary
+  alias ComputationExpressions.Parse
 
   import Auxiliary, only: [
     var: 1,
     src: 2,
     assert: 1,
   ]
+  import Parse
 
   def comp_expr(ast, b) do
-    new_ast = translate_with_custom(ast, b)
+    ast_ast = Enum.map(ast, &Parse.parse/1)
+    new_ast = translate_with_custom(ast_ast, b)
     if Module.open?(b) do
       new_ast = case Module.defines?(b, {:delay, 1}, :def) do
         true -> quote do unquote(b).delay(fn -> unquote(new_ast) end) end
@@ -48,72 +51,65 @@ defmodule ComputationExpressions.Translation do
     t(cexpr_ast, MapSet.new(), fn expr -> expr end, false, b)
   end
 
-  def t([{:let, _ctxt, [{:=, _ctxt2, [p, e]}]} | [_|_] = ce], v, c, q, b) do
-    t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(p) = unquote(e) ; unquote(expr) end) end, q, b)
-  end
+  #def t([let(p, e) | [_|_] = ce], v, c, q, b) do
+  #  t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(p) = unquote(e) ; unquote(expr) end) end, q, b)
+  #end
 
-  def t([{:let!, _ctxt, [{:=, _ctxt2, [p, e]}]} | [_|_] = ce], v, c, q, b) do
+  def t([let!(p, e) | [_|_] = ce], v, c, q, b) do
     t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(b).bind(unquote(src(e, b)), fn unquote(p) -> unquote(expr) end) end) end, q, b)
   end
 
-  def t([{:yield, _ctxt, [e]}], _v, c, _q, b) do
+  def t([yield(e)], _v, c, _q, b) do
     c.(quote do unquote(b).yield(unquote(e)) end)
   end
 
-  def t([{:yield!, _ctxt, [e]}], _v, c, _q, b) do
+  def t([yield!(e)], _v, c, _q, b) do
     c.(quote do unquote(b).yield_from(unquote(e)) end)
   end
 
-  def t([{:return, _ctxt, [e]}], _v, c, _q, b) do
+  def t([return(e)], _v, c, _q, b) do
     c.(quote do unquote(b).return(unquote(e)) end)
   end
 
-  def t([{:return!, _ctxt, [e]}], _v, c, _q, b) do
+  def t([return!(e)], _v, c, _q, b) do
     c.(quote do unquote(b).return_from(unquote(e)) end)
   end
 
-  def t([{:use, _ctxt, [{:=, _ctxt2, [p, e]}]} | [_|_] = ce], _v, c, _q, b) do
+  def t([use_(p, e) | [_|_] = ce], _v, c, _q, b) do
     c.(quote do unquote(b).using(unquote(e), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end)
   end
 
-  def t([{:use!, _ctxt, [{:=, _ctxt2, [p, e]}]} | [_|_] = ce], _v, c, _q, b) do
+  def t([use!(p, e) | [_|_] = ce], _v, c, _q, b) do
     c.(quote do unquote(b).bind(unquote(src(e, b)), fn unquote(p) -> unquote(b).using(unquote(p), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end) end)
   end
 
-  def t([{:match, _ctxt, [e, do: cls]}], _v, c, _q, b) do
-    clauses = Enum.flat_map(cls, fn {:->, _, [[pi], cei]} ->
-      ncei = ComputationExpressions.normalize_body(cei)
-      quote do unquote(pi) -> unquote(translate_basic(ncei, b)) end
+  def t([match(val, cls)], _v, c, _q, b) do
+    clauses = Enum.flat_map(cls, fn [pi, cei] ->
+      quote do unquote(pi) -> unquote(translate_basic(cei, b)) end
     end)
-    c.(quote do case unquote(e) do unquote_splicing(clauses) end end)
+    c.(quote do case unquote(val) do unquote_splicing(clauses) end end)
   end
 
-  def t([{:match!, _ctxt, [e, do: cls]}], v, c, q, b) do
-    t(quote do
-      let! x = unquote(e)
-      match x do unquote_splicing(cls) end
-    end, v, c, q, b)
+  def t([match!(val, cls)], v, c, q, b) do
+    var = Macro.unique_var(:x, __MODULE__)
+    t([let!(var, val), match(var, cls)], v, c, q, b)
   end
 
-  def t([{:while, _ctxt, [e, do: ce]}], v, c, q, b) do
-    nce = ComputationExpressions.normalize_body(ce)
-    t(nce, v, fn expr -> c.(quote do unquote(b).while(fn -> unquote(e) end, unquote(b).delay(fn -> unquote(expr) end)) end) end, q, b)
+  def t([while(cnd, ce)], v, c, q, b) do
+    t(ce, v, fn expr -> c.(quote do unquote(b).while(fn -> unquote(cnd) end, unquote(b).delay(fn -> unquote(expr) end)) end) end, q, b)
   end
 
   # try with
 
   # try finally
 
-  def t([{:if, _ctxt, [e, do: ce]}], v, c, q, b) do
-    nce = ComputationExpressions.normalize_body(ce)
-    t(nce, v, fn expr -> c.(quote do if unquote(e) do unquote(expr) else unquote(b).zero() end end) end, q, b)
+  def t([if_then(cnd, ce)], v, c, q, b) do
+    t(ce, v, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b).zero() end end) end, q, b)
   end
 
-  def t([{:if, _ctxt, [e, do: ce1, else: ce2]}], _v, c, q, b) do
+  def t([if_then_else(cnd, ce1, ce2)], _v, c, q, b) do
     assert(not q)
-    nce1 = ComputationExpressions.normalize_body(ce1)
-    nce2 = ComputationExpressions.normalize_body(ce2)
-    c.(quote do if unquote(e) do unquote(translate_basic(nce1, b)) else unquote(translate_basic(nce2, b)) end end)
+    c.(quote do if unquote(cnd) do unquote(translate_basic(ce1, b)) else unquote(translate_basic(ce2, b)) end end)
   end
 
   # for to
@@ -121,12 +117,13 @@ defmodule ComputationExpressions.Translation do
   # for groupJoinOp
   # for
 
-  def t([{:do_, _ctx, [e]} | [_|_] = ce], v, c, q, b) do
+  def t([do_(e) | [_|_] = ce], v, c, q, b) do
     t(ce, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, q, b)
   end
 
-  def t([{:do!, _ctx, [e]} | [_|_] = ce], v, c, q, b) do
-    t(quote do let! {} = unquote(e) ; unquote(ce) end, v, c, q, b)
+  def t([do!(e) | [_|_] = ce], v, c, q, b) do
+    unit = Macro.escape({})
+    t([let!(unit, e), ce], v, c, q, b)
   end
 
   # joinOp
@@ -135,15 +132,21 @@ defmodule ComputationExpressions.Translation do
   # customOperator(maintainsVarSpaceUsingBind) ; e
   # customOperator ; e
 
-  def t([ce1 | [_|_] = ce2], _v, c, _q, b) do
+  # Must it always delay ?
+  def t([cexpr(_, _) = ce1 | [_|_] = ce2], _v, c, _q, b) do
     c.(quote do unquote(b).combine(unquote(translate_basic([ce1], b)), unquote(b).delay(fn -> unquote(translate_basic(ce2, b)) end)) end)
   end
 
-  def t([{:do!, _ctx, [e]}], v, c, q, b) do
-    t(quote do let! {} = unquote(src(e, b)) ; unquote(b).return({}) end, v, c, q, b)
+  def t([do!(e)], v, c, q, b) do
+    unit = Macro.escape({})
+    t([let!(unit, src(e, b)), return(unit)], v, c, q, b)
   end
 
-  def t([e], _v, c, _q, b) do
+  def t([other_expr(e) | [_|_] = ce2], v, c, q, b) do
+    t(ce2, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, q, b)
+  end
+
+  def t([other_expr(e)], _v, c, _q, b) do
     c.(quote do unquote(e) ; unquote(b).zero() end)
   end
 end
