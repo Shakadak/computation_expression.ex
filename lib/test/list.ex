@@ -1,6 +1,4 @@
 defmodule Test.List do
-  use ComputationExpression, debug: true
-
   def bind(m, f) do
     m |> Enum.flat_map(f)
   end

@@ -9,7 +9,6 @@ defmodule ComputationExpression.Translation do
   ]
   import Parse
 
-  def comp_expr(ast, builder), do: comp_expr(ast, builder, builder)
   def comp_expr(ast, builder_ast, b) do
     ast_ast = Enum.map(ast, &Parse.parse/1)
     new_ast = translate_with_custom(ast_ast, builder_ast)
@@ -57,7 +56,13 @@ defmodule ComputationExpression.Translation do
   #end
 
   def t([let!(p, e) | [_|_] = ce], v, c, q, b) do
-    t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(b)._Bind(unquote(src(e, b)), fn unquote(p) -> unquote(expr) end) end) end, q, b)
+    next = fn expr ->
+      ast = quote do unquote(b)._Bind(unquote(src(e, b)), fn unquote(p) -> unquote(expr) end) end
+      # {env, _} = Code.eval_quoted(quote do require unquote(b) ; __ENV__ end)
+      # ast = Macro.expand(ast, env)
+      c.(ast)
+    end
+    t(ce, MapSet.union(v, var(p)), next, q, b)
   end
 
   def t([yield(e)], _v, c, _q, b) do
@@ -69,7 +74,10 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([pure(e)], _v, c, _q, b) do
-    c.(quote do unquote(b)._Pure(unquote(e)) end)
+    ast = quote do unquote(b)._Pure(unquote(e)) end
+    # {env, _} = Code.eval_quoted(quote do require unquote(b) ; __ENV__ end)
+    # ast = Macro.expand(ast, env)
+    c.(ast)
   end
 
   def t([pure!(e)], _v, c, _q, b) do
