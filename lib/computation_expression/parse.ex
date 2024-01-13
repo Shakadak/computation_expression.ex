@@ -1,4 +1,4 @@
-defmodule ComputationExpressions.Parse do
+defmodule ComputationExpression.Parse do
 
   defmacro other_expr(expr), do: {:other_expr, expr}
   defmacro cexpr(op, expr), do: quote(do: {:cexpr, unquote(op), unquote(expr)})
@@ -6,8 +6,8 @@ defmodule ComputationExpressions.Parse do
   defmacro let!(pat, expr), do: quote(do: {:cexpr, :let!, [unquote(pat), unquote(expr)]})
   defmacro yield(expr), do: quote(do: {:cexpr, :yield, unquote(expr)})
   defmacro yield!(expr), do: quote(do: {:cexpr, :yield!, unquote(expr)})
-  defmacro return(expr), do: quote(do: {:cexpr, :return, unquote(expr)})
-  defmacro return!(expr), do: quote(do: {:cexpr, :return!, unquote(expr)})
+  defmacro pure(expr), do: quote(do: {:cexpr, :pure, unquote(expr)})
+  defmacro pure!(expr), do: quote(do: {:cexpr, :pure!, unquote(expr)})
   defmacro use_(pat, expr), do: quote(do: {:cexpr, :use_, [unquote(pat), unquote(expr)]})
   defmacro use!(pat, expr), do: quote(do: {:cexpr, :use!, [unquote(pat), unquote(expr)]})
   defmacro match(val, clauses), do: quote(do: {:cexpr, :match, [unquote(val), unquote(clauses)]})
@@ -34,12 +34,12 @@ defmodule ComputationExpressions.Parse do
     yield!(e)
   end
 
-  def parse({:return, _ctxt, [e]}) do
-    return(e)
+  def parse({:pure, _ctxt, [e]}) do
+    pure(e)
   end
 
-  def parse({:return!, _ctxt, [e]}) do
-    return!(e)
+  def parse({:pure!, _ctxt, [e]}) do
+    pure!(e)
   end
 
   def parse({:use_, _ctxt, [{:=, _ctxt2, [p, e]}]}) do

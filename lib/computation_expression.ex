@@ -1,4 +1,4 @@
-defmodule ComputationExpressions do
+defmodule ComputationExpression do
   defmacro __using__(opts) do
     {debug?, []} = Keyword.pop(opts, :debug, false)
     #quote do
@@ -18,14 +18,47 @@ defmodule ComputationExpressions do
     end
   end
 
+  defmacro compute(computation_builder, do: doo) do
+    generate_ast(computation_builder, doo, [], __CALLER__)
+  end
+  defmacro compute(computation_builder, opts, do: doo) do
+    generate_ast(computation_builder, doo, opts, __CALLER__)
+  end
+
+  @doc false
+  def generate_ast(computation_builder, doo, opts, caller_env) do
+    builder = normalize_computation_builder(computation_builder, caller_env)
+
+    {debug?, []} = Keyword.pop(opts, :debug, false)
+
+    body = __MODULE__.normalize_body(doo)
+    __MODULE__.Translation.comp_expr(body, computation_builder, builder)
+    |> case do x -> if debug? do IO.puts(Macro.to_string(x)) end ; x end
+  end
+
+  def normalize_computation_builder({:__aliases__, meta, aliases}, caller) do
+    case Keyword.fetch(meta, :alias) do
+      {:ok, false} -> Module.concat(aliases)
+      {:ok, alias} -> alias
+      :error ->
+        case aliases do
+          [x] -> case Macro.Env.fetch_alias(caller, x) do
+            {:ok, module} -> module
+            :error -> Module.concat(aliases)
+          end
+          xs -> Module.concat(xs)
+        end
+    end
+  end
+
   defguard is_ce_form(x) when x in [
     :let!,
     :and!,
     :do,
     :yield,
     :yield!,
-    :return,
-    :return!,
+    :pure,
+    :pure!,
     :match!,
     # Other
     :"\if",
@@ -65,15 +98,15 @@ defmodule ComputationExpressions do
     raise kind, opts
   end
 
-  def build(module, [{:return, _ctxt, args}], _caller) do
+  def build(module, [{:pure, _ctxt, args}], _caller) do
     quote do
-      unquote(module).return(unquote_splicing(args))
+      unquote(module).pure(unquote_splicing(args))
     end
   end
 
-  def build(module, [{:return!, _ctxt, args}], _caller) do
+  def build(module, [{:pure!, _ctxt, args}], _caller) do
     quote do
-      unquote(module).return_from(unquote_splicing(args))
+      unquote(module).pure_from(unquote_splicing(args))
     end
   end
 

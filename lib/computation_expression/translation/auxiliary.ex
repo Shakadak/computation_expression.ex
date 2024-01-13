@@ -1,4 +1,4 @@
-defmodule ComputationExpressions.Translation.Auxiliary do
+defmodule ComputationExpression.Translation.Auxiliary do
   def var(ast) do
     Macro.postwalker(ast)
     |> Enum.filter(fn
