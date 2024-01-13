@@ -36,19 +36,8 @@ defmodule ComputationExpression do
     |> case do x -> if debug? do IO.puts(Macro.to_string(x)) end ; x end
   end
 
-  def normalize_computation_builder({:__aliases__, meta, aliases}, caller) do
-    case Keyword.fetch(meta, :alias) do
-      {:ok, false} -> Module.concat(aliases)
-      {:ok, alias} -> alias
-      :error ->
-        case aliases do
-          [x] -> case Macro.Env.fetch_alias(caller, x) do
-            {:ok, module} -> module
-            :error -> Module.concat(aliases)
-          end
-          xs -> Module.concat(xs)
-        end
-    end
+  def normalize_computation_builder({:__aliases__, _meta, _aliases} = ast, caller) do
+    Macro.expand(ast, caller)
   end
 
   defguard is_ce_form(x) when x in [
