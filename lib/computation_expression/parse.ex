@@ -53,7 +53,7 @@ defmodule ComputationExpression.Parse do
   def parse({:match, _ctxt, [val, do: cls]}) do
     clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
       ncei =
-        ComputationExpressions.normalize_body(cei)
+        ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
       [pi, ncei]
     end)
@@ -63,7 +63,7 @@ defmodule ComputationExpression.Parse do
   def parse({:match!, _ctxt, [val, do: cls]}) do
     clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
       ncei =
-        ComputationExpressions.normalize_body(cei)
+        ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
       [pi, ncei]
     end)
@@ -72,7 +72,7 @@ defmodule ComputationExpression.Parse do
 
   def parse({:while, _ctxt, [cnd, do: ce]}) do
     nce =
-      ComputationExpressions.normalize_body(ce)
+      ComputationExpression.normalize_body(ce)
       |> Enum.map(&parse/1)
     while(cnd, nce)
   end
@@ -83,17 +83,17 @@ defmodule ComputationExpression.Parse do
 
   def parse({:if, _ctxt, [cnd, do: ce]}) do
     nce =
-      ComputationExpressions.normalize_body(ce)
+      ComputationExpression.normalize_body(ce)
       |> Enum.map(&parse/1)
     if_then(cnd, nce)
   end
 
   def parse({:if, _ctxt, [cnd, do: ce1, else: ce2]}) do
     nce1 =
-      ComputationExpressions.normalize_body(ce1)
+      ComputationExpression.normalize_body(ce1)
       |> Enum.map(&parse/1)
     nce2 =
-      ComputationExpressions.normalize_body(ce2)
+      ComputationExpression.normalize_body(ce2)
       |> Enum.map(&parse/1)
     if_then_else(cnd, nce1, nce2)
   end

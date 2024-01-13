@@ -7,7 +7,7 @@ defmodule Test.Option do
 end
 
 defmodule Test.Trace do
-  use ComputationExpressions, debug: true
+  use ComputationExpression, debug: true
 
   import Test.Option, only: [
     some: 1,
