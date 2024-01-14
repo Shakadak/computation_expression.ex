@@ -132,7 +132,7 @@ defmodule ComputationExpression.Translation do
 
   def t([do!(e) | [_|_] = ce], v, c, q, b) do
     unit = Macro.escape({})
-    t([let!(unit, e), ce], v, c, q, b)
+    t([let!(unit, e) | ce], v, c, q, b)
   end
 
   # joinOp
