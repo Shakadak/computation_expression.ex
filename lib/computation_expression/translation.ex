@@ -12,35 +12,26 @@ defmodule ComputationExpression.Translation do
     ast_ast = Enum.map(ast, &Parse.parse/1)
     #|> IO.inspect(label: "ast parsed")
     new_ast = translate_with_custom(ast_ast, builder_ast)
-    if Module.open?(b) do
-      new_ast = case Module.defines?(b, {:_Delay, 1}, :def) do
-        true -> quote do unquote(b).delay(fn -> unquote(new_ast) end) end
-        false -> new_ast
-      end
-      new_ast = case Module.defines?(b, {:_Quote, 1}, :def) do
-        true -> b._Quote(new_ast)
-        false -> new_ast
-      end
-      new_ast = case Module.defines?(b, {:_Run, 1}, :def) do
-        true -> quote do unquote(b)._Run(unquote(new_ast)) end
-        false -> new_ast
-      end
-      new_ast
+
+    check = if Module.open?(b) do
+      &Module.defines?(b, {&1, &2}, :def)
     else
-      new_ast = case function_exported?(b, :_Delay, 1) do
-        true -> quote do unquote(b).delay(fn -> unquote(new_ast) end) end
-        false -> new_ast
-      end
-      new_ast = case function_exported?(b, :_Quote, 1) do
-        true -> b._Quote(new_ast)
-        false -> new_ast
-      end
-      new_ast = case function_exported?(b, :_Run, 1) do
-        true -> quote do unquote(b)._Run(unquote(new_ast)) end
-        false -> new_ast
-      end
-      new_ast
+      &function_exported?(b, &1, &2)
     end
+
+    new_ast = case check.(:_Delay, 1) do
+      true -> quote do unquote(b)._Delay(fn -> unquote(new_ast) end) end
+      false -> new_ast
+    end
+    new_ast = case check.(:_Quote, 1) do
+      true -> b._Quote(new_ast)
+      false -> new_ast
+    end
+    new_ast = case check.(:_Run, 1) do
+      true -> quote do unquote(b)._Run(unquote(new_ast)) end
+      false -> new_ast
+    end
+    new_ast
   end
 
   def translate_with_custom(cexpr_ast, b) do
