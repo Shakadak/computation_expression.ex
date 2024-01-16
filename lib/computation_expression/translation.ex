@@ -5,12 +5,12 @@ defmodule ComputationExpression.Translation do
   import Auxiliary, only: [
     var: 1,
     src: 2,
-    assert: 1,
   ]
   import Parse
 
   def comp_expr(ast, builder_ast, b) do
     ast_ast = Enum.map(ast, &Parse.parse/1)
+    #|> IO.inspect(label: "ast parsed")
     new_ast = translate_with_custom(ast_ast, builder_ast)
     if Module.open?(b) do
       new_ast = case Module.defines?(b, {:_Delay, 1}, :def) do
@@ -44,80 +44,79 @@ defmodule ComputationExpression.Translation do
   end
 
   def translate_with_custom(cexpr_ast, b) do
-    t(cexpr_ast, MapSet.new(), fn expr -> expr end, true, b)
+    t(cexpr_ast, MapSet.new(), fn expr -> expr end, b)
   end
 
   def translate_basic(cexpr_ast, b) do
-    t(cexpr_ast, MapSet.new(), fn expr -> expr end, false, b)
+    t(cexpr_ast, MapSet.new(), fn expr -> expr end, b)
   end
 
-  #def t([let(p, e) | [_|_] = ce], v, c, q, b) do
-  #  t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(p) = unquote(e) ; unquote(expr) end) end, q, b)
+  #def t([let(p, e) | [_|_] = ce], v, c, b) do
+  #  t(ce, MapSet.union(v, var(p)), fn expr -> c.(quote do unquote(p) = unquote(e) ; unquote(expr) end) end, b)
   #end
 
-  def t([let!(p, e) | [_|_] = ce], v, c, q, b) do
+  def t([let!(p, e) | [_|_] = ce], v, c, b) do
     next = fn expr ->
       ast = quote do unquote(b)._Bind(unquote(src(e, b)), fn unquote(p) -> unquote(expr) end) end
       # {env, _} = Code.eval_quoted(quote do require unquote(b) ; __ENV__ end)
       # ast = Macro.expand(ast, env)
       c.(ast)
     end
-    t(ce, MapSet.union(v, var(p)), next, q, b)
+    t(ce, MapSet.union(v, var(p)), next, b)
   end
 
-  def t([yield(e)], _v, c, _q, b) do
+  def t([yield(e)], _v, c, b) do
     c.(quote do unquote(b)._Yield(unquote(e)) end)
   end
 
-  def t([yield!(e)], _v, c, _q, b) do
+  def t([yield!(e)], _v, c, b) do
     c.(quote do unquote(b)._YieldFrom(unquote(e)) end)
   end
 
-  def t([pure(e)], _v, c, _q, b) do
+  def t([pure(e)], _v, c, b) do
     ast = quote do unquote(b)._Pure(unquote(e)) end
     # {env, _} = Code.eval_quoted(quote do require unquote(b) ; __ENV__ end)
     # ast = Macro.expand(ast, env)
     c.(ast)
   end
 
-  def t([pure!(e)], _v, c, _q, b) do
+  def t([pure!(e)], _v, c, b) do
     c.(quote do unquote(b)._PureFrom(unquote(e)) end)
   end
 
-  def t([use_(p, e) | [_|_] = ce], _v, c, _q, b) do
+  def t([use_(p, e) | [_|_] = ce], _v, c, b) do
     c.(quote do unquote(b)._Using(unquote(e), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end)
   end
 
-  def t([use!(p, e) | [_|_] = ce], _v, c, _q, b) do
+  def t([use!(p, e) | [_|_] = ce], _v, c, b) do
     c.(quote do unquote(b)._Bind(unquote(src(e, b)), fn unquote(p) -> unquote(b)._Using(unquote(p), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end) end)
   end
 
-  def t([match(val, cls)], _v, c, _q, b) do
+  def t([match(val, cls)], _v, c, b) do
     clauses = Enum.flat_map(cls, fn [pi, cei] ->
       quote do unquote(pi) -> unquote(translate_basic(cei, b)) end
     end)
     c.(quote do case unquote(val) do unquote_splicing(clauses) end end)
   end
 
-  def t([match!(val, cls)], v, c, q, b) do
+  def t([match!(val, cls)], v, c, b) do
     var = Macro.unique_var(:x, __MODULE__)
-    t([let!(var, val), match(var, cls)], v, c, q, b)
+    t([let!(var, val), match(var, cls)], v, c, b)
   end
 
-  def t([while(cnd, ce)], v, c, q, b) do
-    t(ce, v, fn expr -> c.(quote do unquote(b)._While(fn -> unquote(cnd) end, unquote(b)._Delay(fn -> unquote(expr) end)) end) end, q, b)
+  def t([while(cnd, ce)], v, c, b) do
+    t(ce, v, fn expr -> c.(quote do unquote(b)._While(fn -> unquote(cnd) end, unquote(b)._Delay(fn -> unquote(expr) end)) end) end, b)
   end
 
   # try with
 
   # try finally
 
-  def t([if_then(cnd, ce)], v, c, q, b) do
-    t(ce, v, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b)._Zero() end end) end, q, b)
+  def t([if_then(cnd, ce)], v, c, b) do
+    t(ce, v, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b)._Zero() end end) end, b)
   end
 
-  def t([if_then_else(cnd, ce1, ce2)], _v, c, q, b) do
-    assert(not q)
+  def t([if_then_else(cnd, ce1, ce2)], _v, c, b) do
     c.(quote do if unquote(cnd) do unquote(translate_basic(ce1, b)) else unquote(translate_basic(ce2, b)) end end)
   end
 
@@ -126,36 +125,33 @@ defmodule ComputationExpression.Translation do
   # for groupJoinOp
   # for
 
-  def t([do_(e) | [_|_] = ce], v, c, q, b) do
-    t(ce, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, q, b)
+  def t([do_(e) | [_|_] = ce], v, c, b) do
+    t(ce, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
   end
 
-  def t([do!(e) | [_|_] = ce], v, c, q, b) do
+  def t([do!(e) | [_|_] = ce], v, c, b) do
     unit = Macro.escape({})
-    t([let!(unit, e) | ce], v, c, q, b)
+    t([let!(unit, e) | ce], v, c, b)
   end
 
   # joinOp
   # groupJoinOp
-  # customOperator
-  # customOperator(maintainsVarSpaceUsingBind) ; e
-  # customOperator ; e
 
   # Must it always delay ?
-  def t([cexpr(_, _) = ce1 | [_|_] = ce2], _v, c, _q, b) do
+  def t([cexpr(_, _) = ce1 | [_|_] = ce2], _v, c, b) do
     c.(quote do unquote(b)._Combine(unquote(translate_basic([ce1], b)), unquote(b)._Delay(fn -> unquote(translate_basic(ce2, b)) end)) end)
   end
 
-  def t([do!(e)], v, c, q, b) do
+  def t([do!(e)], v, c, b) do
     unit = Macro.escape({})
-    t([let!(unit, src(e, b)), pure(unit)], v, c, q, b)
+    t([let!(unit, src(e, b)), pure(unit)], v, c, b)
   end
 
-  def t([other_expr(e) | [_|_] = ce2], v, c, q, b) do
-    t(ce2, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, q, b)
+  def t([other_expr(e) | [_|_] = ce2], v, c, b) do
+    t(ce2, v, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
   end
 
-  def t([other_expr(e)], _v, c, _q, b) do
+  def t([other_expr(e)], _v, c, b) do
     c.(quote do unquote(e) ; unquote(b)._Zero() end)
   end
 end

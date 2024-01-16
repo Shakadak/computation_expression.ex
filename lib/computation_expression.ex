@@ -55,6 +55,7 @@ defmodule ComputationExpression do
 
   def normalize_body({:__block__, _context, body}) when is_list(body), do: body
   def normalize_body({_, _ctxt, _} = body), do: [body]
+  def normalize_body(literal), do: [literal]
 
   def root_build(module, body, caller) do
     built = build(module, body, caller)

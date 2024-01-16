@@ -81,14 +81,14 @@ defmodule ComputationExpression.Parse do
 
   # try finally
 
-  def parse({:if, _ctxt, [cnd, do: ce]}) do
+  def parse({:if, _ctxt, [cnd, [do: ce]]}) do
     nce =
       ComputationExpression.normalize_body(ce)
       |> Enum.map(&parse/1)
     if_then(cnd, nce)
   end
 
-  def parse({:if, _ctxt, [cnd, do: ce1, else: ce2]}) do
+  def parse({:if, _ctxt, [cnd, [do: ce1, else: ce2]]}) do
     nce1 =
       ComputationExpression.normalize_body(ce1)
       |> Enum.map(&parse/1)

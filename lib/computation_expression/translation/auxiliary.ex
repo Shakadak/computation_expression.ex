@@ -12,5 +12,5 @@ defmodule ComputationExpression.Translation.Auxiliary do
     ast
   end
 
-  def assert(true), do: :ok
+  def assert(true), do: {}
 end
