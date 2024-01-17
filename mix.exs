@@ -1,4 +1,4 @@
-defmodule ComputationExpressions.MixProject do
+defmodule ComputationExpression.MixProject do
   use Mix.Project
 
   def project do

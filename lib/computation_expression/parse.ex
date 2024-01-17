@@ -17,6 +17,7 @@ defmodule ComputationExpression.Parse do
   defmacro if_then_else(cnd, then, else_), do: quote(do: {:cexpr, :if_then_else, [unquote(cnd), unquote(then), unquote(else_)]})
   defmacro do_(expr), do: quote(do: {:cexpr, :do_, [unquote(expr)]})
   defmacro do!(expr), do: quote(do: {:cexpr, :do!, [unquote(expr)]})
+  defmacro for_(pat, expr, ce), do: quote(do: {:cexpr, :for_, [unquote(pat), unquote(expr), unquote(ce)]})
 
   def parse({:let, _ctxt, [{:=, _ctxt2, [_p, _e]} = expr]}) do
     other_expr(expr)
@@ -102,6 +103,12 @@ defmodule ComputationExpression.Parse do
   # for joinOp
   # for groupJoinOp
   # for
+  def parse({:for, [], [{:in, _, [x, e]}, [do: ce]]}) do
+    nce =
+      ComputationExpression.normalize_body(ce)
+      |> Enum.map(&parse/1)
+    for_(x, e, nce)
+  end
 
   def parse({:do_, _ctx, [e]}) do
     do_(e)
