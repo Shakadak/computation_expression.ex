@@ -103,7 +103,7 @@ defmodule ComputationExpression.Parse do
   # for joinOp
   # for groupJoinOp
   # for
-  def parse({:for, [], [{:in, _, [x, e]}, [do: ce]]}) do
+  def parse({:for, _, [{:in, _, [x, e]}, [do: ce]]}) do
     nce =
       ComputationExpression.normalize_body(ce)
       |> Enum.map(&parse/1)
