@@ -110,6 +110,16 @@ defmodule ComputationExpression.Parse do
     for_(x, e, nce)
   end
 
+  #def parse({:for, _meta, [
+  # {:in, [line: 126, column: 13],
+  #  [{:i, [line: 126, column: 11], nil}, {:.., [line: 126, column: 17], [1, 5]}]},
+  # [
+  #   do: {:yield, [line: 126, column: 24],
+  #    [{:+, [line: 126, column: 32], [{:i, [line: 126, column: 30], nil}, 2]}]}
+  # ]
+  #  ]}) do
+  #end
+
   def parse({:do_, _ctx, [e]}) do
     do_(e)
   end
@@ -125,6 +135,7 @@ defmodule ComputationExpression.Parse do
   # customOperator ; e
 
   def parse(other) do
+    #IO.inspect(other, label: "OTHER")
     other_expr(other)
   end
 end
