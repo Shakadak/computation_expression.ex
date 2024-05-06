@@ -40,6 +40,17 @@ defmodule ComputationExpression do
     Macro.expand(ast, caller)
   end
 
+  def normalize_computation_builder({:__MODULE__, _meta, ctxt} = ast, caller) when is_atom(ctxt) do
+    Macro.expand(ast, caller)
+  end
+
+  def normalize_computation_builder({var, _meta, ctxt} = ast, caller) when is_atom(var) and is_atom(ctxt) do
+    raise CompileError,
+      file: caller.file,
+      line: caller.line,
+      description: "Variable detected `#{Macro.to_string(ast)}`, consider using a macro to defer the evaluation of `compute/2`"
+  end
+
   defguard is_ce_form(x) when x in [
     :let!,
     :and!,
