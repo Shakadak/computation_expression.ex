@@ -130,7 +130,7 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([do_(e) | [_|_] = ce], c, b) do
-    t(ce, fn expr -> c.(quote do {} = unquote(e) ; unquote(expr) end) end, b)
+    t(ce, fn expr -> c.(quote do unquote(gen_other(e)) ; unquote(expr) end) end, b)
   end
 
   def t([do!(e) | [_|_] = ce], c, b) do
@@ -149,10 +149,20 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([other_expr(e) | [_|_] = ce2], c, b) do
-    t(ce2, fn expr -> c.(quote do {} = unquote(e) ; unquote(expr) end) end, b)
+    t(ce2, fn expr -> c.(quote do unquote(gen_other(e)) ; unquote(expr) end) end, b)
   end
 
   def t([other_expr(e)], c, b) do
-    c.(quote do {} = unquote(e) ; unquote(b)._Zero() end)
+    c.(quote do unquote(gen_other(e)) ; unquote(b)._Zero() end) end
+
+  def gen_other(e) do
+    meta = case e do
+      {_, meta, _} -> meta
+      _ -> []
+    end
+
+    {l, meta2, r} = quote do {} = unquote(e) end
+    other = {l, meta ++ meta2, r}
+    IO.inspect(other, label: "gen_other")
   end
 end
