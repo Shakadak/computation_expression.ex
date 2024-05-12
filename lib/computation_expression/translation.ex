@@ -47,9 +47,9 @@ defmodule ComputationExpression.Translation do
     t(cexpr_ast, fn expr -> expr end, b)
   end
 
-  #def t([let(p, e) | [_|_] = ce], c, b) do
-  #  t(ce, MapSet.union(var(p)), fn expr -> c.(quote do unquote(p) = unquote(e) ; unquote(expr) end) end, b)
-  #end
+  def t([let(e) | [_|_] = ce], c, b) do
+    t(ce, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
+  end
 
   def t([let!(p, e) | [_|_] = ce], c, b) do
     next = fn ast ->
@@ -108,6 +108,11 @@ defmodule ComputationExpression.Translation do
     t(ce, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b)._Zero() end end) end, b)
   end
 
+  # def t([if_then(cnd, ce) | [_|_] = ce], c, b) do
+  #   e = t(ce, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b)._Zero() end end) end, b)
+  #   t([do!(e) | ce], c, b)
+  # end
+
   def t([if_then_else(cnd, ce1, ce2)], c, b) do
     c.(quote do if unquote(cnd) do unquote(translate_basic(ce1, b)) else unquote(translate_basic(ce2, b)) end end)
   end
@@ -125,7 +130,7 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([do_(e) | [_|_] = ce], c, b) do
-    t(ce, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
+    t(ce, fn expr -> c.(quote do {} = unquote(e) ; unquote(expr) end) end, b)
   end
 
   def t([do!(e) | [_|_] = ce], c, b) do
@@ -144,10 +149,10 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([other_expr(e) | [_|_] = ce2], c, b) do
-    t(ce2, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
+    t(ce2, fn expr -> c.(quote do {} = unquote(e) ; unquote(expr) end) end, b)
   end
 
   def t([other_expr(e)], c, b) do
-    c.(quote do unquote(e) ; unquote(b)._Zero() end)
+    c.(quote do {} = unquote(e) ; unquote(b)._Zero() end)
   end
 end

@@ -3,6 +3,7 @@ defmodule ComputationExpression.Parse do
   defmacro other_expr(expr), do: {:other_expr, expr}
   defmacro cexpr(op, expr), do: quote(do: {:cexpr, unquote(op), unquote(expr)})
 
+  defmacro let(expr), do: quote(do: {:cexpr, :let, [unquote(expr)]})
   defmacro let!(pat, expr), do: quote(do: {:cexpr, :let!, [unquote(pat), unquote(expr)]})
   defmacro yield(expr), do: quote(do: {:cexpr, :yield, unquote(expr)})
   defmacro yield!(expr), do: quote(do: {:cexpr, :yield!, unquote(expr)})
@@ -20,7 +21,7 @@ defmodule ComputationExpression.Parse do
   defmacro for_(pat, expr, ce), do: quote(do: {:cexpr, :for_, [unquote(pat), unquote(expr), unquote(ce)]})
 
   def parse({:let, _ctxt, [{:=, _ctxt2, [_p, _e]} = expr]}) do
-    other_expr(expr)
+    let(expr)
   end
 
   def parse({:let!, _ctxt, [{:=, _ctxt2, [p, e]}]}) do
