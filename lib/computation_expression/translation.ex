@@ -163,6 +163,6 @@ defmodule ComputationExpression.Translation do
 
     {l, meta2, r} = quote do {} = unquote(e) end
     other = {l, meta ++ meta2, r}
-    IO.inspect(other, label: "gen_other")
+    other
   end
 end
