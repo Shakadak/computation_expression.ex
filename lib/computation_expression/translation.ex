@@ -7,19 +7,24 @@ defmodule ComputationExpression.Translation do
   ]
   import Parse
 
-  def comp_expr(ast, builder_ast, b) do
+  def comp_expr(ast, builder_ast, b, usage) do
     ast_ast = Enum.map(ast, &Parse.parse/1)
     #|> IO.inspect(label: "ast parsed")
-    new_ast = translate_with_custom(ast_ast, builder_ast)
+
+    invoke = case usage do
+      :self -> fn ast -> ast end
+      :outside -> fn ast -> quote do unquote(builder_ast).unquote(ast) end end
+    end
+    new_ast = translate_basic(ast_ast, invoke)
 
     check = if Module.open?(b) do
       &Module.defines?(b, {&1, &2}, :def)
     else
-      &function_exported?(b, &1, &2)
+      &function_exported?(b, &1, &2) or macro_exported?(b, &1, &2)
     end
 
     new_ast = case check.(:_Delay, 1) do
-      true -> quote do unquote(b)._Delay(fn -> unquote(new_ast) end) end
+      true -> invoke.(quote do _Delay(fn -> unquote(new_ast) end) end)
       false -> new_ast
     end
     new_ast = case check.(:_Quote, 1) do
@@ -27,7 +32,7 @@ defmodule ComputationExpression.Translation do
       false -> new_ast
     end
     new_ast = case check.(:_Run, 1) do
-      true -> quote do unquote(b)._Run(unquote(new_ast)) end
+      true -> invoke.(quote do _Run(unquote(new_ast)) end)
       false -> new_ast
     end
     new_ast
@@ -53,35 +58,42 @@ defmodule ComputationExpression.Translation do
 
   def t([let!(p, e) | [_|_] = ce], c, b) do
     next = fn ast ->
-      ast = quote do unquote(b)._Bind(unquote(e), fn unquote(p) -> unquote(ast) end) end
-      c.(ast)
+      ast = quote do _Bind(unquote(e), fn unquote(p) -> unquote(ast) end) end
+      c.(b.(ast))
     end
     t(ce, next, b)
   end
 
   def t([yield(e)], c, b) do
-    c.(quote do unquote(b)._Yield(unquote(e)) end)
+    ast = quote do _Yield(unquote(e)) end
+    c.(b.(ast))
   end
 
   def t([yield!(e)], c, b) do
-    c.(quote do unquote(b)._YieldFrom(unquote(e)) end)
+    ast = quote do _YieldFrom(unquote(e)) end
+    c.(b.(ast))
   end
 
   def t([pure(e)], c, b) do
-    ast = quote do unquote(b)._Pure(unquote(e)) end
-    c.(ast)
+    ast = quote do _Pure(unquote(e)) end
+    c.(b.(ast))
   end
 
   def t([pure!(e)], c, b) do
-    c.(quote do unquote(b)._PureFrom(unquote(e)) end)
+    ast = b.(quote do _PureFrom(unquote(e)) end)
+    c.(ast)
   end
 
   def t([use_(p, e) | [_|_] = ce], c, b) do
-    c.(quote do unquote(b)._Using(unquote(e), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end)
+    ast = quote do _Using(unquote(e), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end
+    c.(b.(ast))
   end
 
   def t([use!(p, e) | [_|_] = ce], c, b) do
-    c.(quote do unquote(b)._Bind(unquote(e), fn unquote(p) -> unquote(b)._Using(unquote(p), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end) end)
+    inner_ast = quote do _Using(unquote(p), fn unquote(p) -> unquote(translate_basic(ce, b)) end) end
+    inner_ast = b.(inner_ast)
+    ast = quote do _Bind(unquote(e), fn unquote(p) -> unquote(inner_ast) end) end
+    c.(b.(ast))
   end
 
   def t([match(val, cls)], c, b) do
@@ -97,7 +109,11 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([while(cnd, ce)], c, b) do
-    t(ce, fn expr -> c.(quote do unquote(b)._While(fn -> unquote(cnd) end, unquote(b)._Delay(fn -> unquote(expr) end)) end) end, b)
+    t(ce, fn expr ->
+      inner_ast = b.(quote do _Delay(fn -> unquote(expr) end) end)
+      ast = quote do _While(fn -> unquote(cnd) end, unquote(inner_ast)) end
+      c.(b.(ast))
+    end, b)
   end
 
   # try with
@@ -105,7 +121,10 @@ defmodule ComputationExpression.Translation do
   # try finally
 
   def t([if_then(cnd, ce)], c, b) do
-    t(ce, fn expr -> c.(quote do if unquote(cnd) do unquote(expr) else unquote(b)._Zero() end end) end, b)
+    t(ce, fn expr ->
+      ast = b.(quote do _Zero() end)
+      c.(quote do if unquote(cnd) do unquote(expr) else unquote(ast) end end)
+      end, b)
   end
 
   # def t([if_then(cnd, ce) | [_|_] = ce], c, b) do
@@ -121,9 +140,9 @@ defmodule ComputationExpression.Translation do
   # for
   def t([for_(pat, expr, ce)], c, b) do
     next = fn ast ->
-      ast = quote do
-        unquote(b)._For(unquote(expr), fn unquote(pat) -> unquote(ast) end)
-      end
+      ast = b.(quote do
+        _For(unquote(expr), fn unquote(pat) -> unquote(ast) end)
+      end)
       c.(ast)
     end
     t(ce, next, b)
@@ -140,7 +159,9 @@ defmodule ComputationExpression.Translation do
 
   # Must it always delay ?
   def t([cexpr(_, _) = ce1 | [_|_] = ce2], c, b) do
-    c.(quote do unquote(b)._Combine(unquote(translate_basic([ce1], b)), unquote(b)._Delay(fn -> unquote(translate_basic(ce2, b)) end)) end)
+    inner_ast = quote do _Delay(fn -> unquote(translate_basic(ce2, b)) end) end
+    ast = b.(quote do _Combine(unquote(translate_basic([ce1], b)), unquote(inner_ast)) end)
+    c.(ast)
   end
 
   def t([do!(e)], c, b) do
@@ -153,7 +174,9 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([other_expr(e)], c, b) do
-    c.(quote do unquote(gen_other(e)) ; unquote(b)._Zero() end) end
+    ast = b.(quote do _Zero() end)
+    c.(quote do unquote(gen_other(e)) ; unquote(ast) end)
+  end
 
   def gen_other(e) do
     meta = case e do

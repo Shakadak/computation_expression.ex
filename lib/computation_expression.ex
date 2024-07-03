@@ -28,11 +28,28 @@ defmodule ComputationExpression do
   @doc false
   def generate_ast(computation_builder, doo, opts, caller_env) do
     builder = normalize_computation_builder(computation_builder, caller_env)
+    usage = if caller_env.module == builder do
+      :self
+    else
+      :outside
+    end
 
     {debug?, []} = Keyword.pop(opts, :debug, false)
 
     body = __MODULE__.normalize_body(doo)
-    __MODULE__.Translation.comp_expr(body, computation_builder, builder)
+    __MODULE__.Translation.comp_expr(body, computation_builder, builder, usage)
+    |> case do x ->
+      case usage do
+        :outside ->
+          quote do
+            require unquote(computation_builder)
+            unquote(x)
+          end
+
+        :self ->
+          x
+      end
+    end
     |> case do x -> if debug? do IO.puts(Macro.to_string(x)) end ; x end
   end
 
