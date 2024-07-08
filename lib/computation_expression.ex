@@ -37,7 +37,7 @@ defmodule ComputationExpression do
     {debug?, []} = Keyword.pop(opts, :debug, false)
 
     body = __MODULE__.normalize_body(doo)
-    __MODULE__.Translation.comp_expr(body, computation_builder, builder, usage)
+    __MODULE__.Translation.comp_expr(body, computation_builder, builder, usage, debug?)
     |> case do x ->
       case usage do
         :outside ->

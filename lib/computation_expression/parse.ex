@@ -4,15 +4,15 @@ defmodule ComputationExpression.Parse do
   defmacro cexpr(op, expr), do: quote(do: {:cexpr, unquote(op), unquote(expr)})
 
   defmacro let(expr), do: quote(do: {:cexpr, :let, [unquote(expr)]})
-  defmacro let!(pat, expr), do: quote(do: {:cexpr, :let!, [unquote(pat), unquote(expr)]})
+  defmacro let!(pat, expr, ctxt), do: quote(do: {:cexpr, :let!, [unquote(pat), unquote(expr)], unquote(ctxt)})
   defmacro yield(expr), do: quote(do: {:cexpr, :yield, unquote(expr)})
   defmacro yield!(expr), do: quote(do: {:cexpr, :yield!, unquote(expr)})
   defmacro pure(expr), do: quote(do: {:cexpr, :pure, unquote(expr)})
   defmacro pure!(expr), do: quote(do: {:cexpr, :pure!, unquote(expr)})
   defmacro use_(pat, expr), do: quote(do: {:cexpr, :use_, [unquote(pat), unquote(expr)]})
   defmacro use!(pat, expr), do: quote(do: {:cexpr, :use!, [unquote(pat), unquote(expr)]})
-  defmacro match(val, clauses), do: quote(do: {:cexpr, :match, [unquote(val), unquote(clauses)]})
-  defmacro match!(val, clauses), do: quote(do: {:cexpr, :match!, [unquote(val), unquote(clauses)]})
+  defmacro match(val, clauses, ctxt), do: quote(do: {:cexpr, :match, [unquote(val), unquote(clauses)], unquote(ctxt)})
+  defmacro match!(val, clauses, ctxt), do: quote(do: {:cexpr, :match!, [unquote(val), unquote(clauses)], unquote(ctxt)})
   defmacro while(cnd, expr), do: quote(do: {:cexpr, :while, [unquote(cnd), unquote(expr)]})
   defmacro if_then(cnd, then), do: quote(do: {:cexpr, :if_then, [unquote(cnd), unquote(then)]})
   defmacro if_then_else(cnd, then, else_), do: quote(do: {:cexpr, :if_then_else, [unquote(cnd), unquote(then), unquote(else_)]})
@@ -37,8 +37,8 @@ defmodule ComputationExpression.Parse do
     let(expr)
   end
 
-  def parse({:let!, _ctxt, [{:=, _ctxt2, [p, e]}]}) do
-    let!(p, e)
+  def parse({:let!, _ctxt, [{:=, ctxt2, [p, e]}]}) do
+    let!(p, e, ctxt2)
   end
 
   def parse({:yield, _ctxt, [e]}) do
@@ -65,24 +65,24 @@ defmodule ComputationExpression.Parse do
     use!(p, e)
   end
 
-  def parse({:match, _ctxt, [val, do: cls]}) do
+  def parse({:match, ctxt, [val, [do: cls]]}) do
     clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
       ncei =
         ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
       [pi, ncei]
     end)
-    match(val, clauses)
+    match(val, clauses, ctxt)
   end
 
-  def parse({:match!, _ctxt, [val, do: cls]}) do
+  def parse({:match!, ctxt, [val, [do: cls]]}) do
     clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
       ncei =
         ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
       [pi, ncei]
     end)
-    match!(val, clauses)
+    match!(val, clauses, ctxt)
   end
 
   def parse({:while, _ctxt, [cnd, do: ce]}) do

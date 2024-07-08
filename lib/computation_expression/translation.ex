@@ -1,15 +1,13 @@
 defmodule ComputationExpression.Translation do
-  alias ComputationExpression.Translation.Auxiliary
   alias ComputationExpression.Parse
-
-  import Auxiliary, only: [
-    src: 2,
-  ]
   import Parse
 
-  def comp_expr(ast, builder_ast, b, usage) do
+  def comp_expr(ast, builder_ast, b, usage, _debug?) do
     ast_ast = Enum.map(ast, &Parse.parse/1)
-    #|> IO.inspect(label: "ast parsed")
+    #case debug? do
+    #  true -> IO.inspect(ast_ast, label: "ast parsed")
+    #  false -> {}
+    #end
 
     invoke = case usage do
       :self -> fn ast -> ast end
@@ -56,9 +54,11 @@ defmodule ComputationExpression.Translation do
     t(ce, fn expr -> c.(quote do unquote(e) ; unquote(expr) end) end, b)
   end
 
-  def t([let!(p, e) | [_|_] = ce], c, b) do
+  def t([let!(p, e, ctxt) | [_|_] = ce], c, b) do
+    ctxt = Map.new(ctxt)
     next = fn ast ->
-      ast = quote do _Bind(unquote(e), fn unquote(p) -> unquote(ast) end) end
+      fn_ast = quote line: ctxt.line do fn unquote(p) -> unquote(ast) end end
+      ast = quote do _Bind(unquote(e), unquote(fn_ast)) end
       c.(b.(ast))
     end
     t(ce, next, b)
@@ -96,16 +96,17 @@ defmodule ComputationExpression.Translation do
     c.(b.(ast))
   end
 
-  def t([match(val, cls)], c, b) do
+  def t([match(val, cls, ctxt)], c, b) do
     clauses = Enum.flat_map(cls, fn [pi, cei] ->
       quote do unquote(pi) -> unquote(translate_basic(cei, b)) end
     end)
-    c.(quote do case unquote(val) do unquote_splicing(clauses) end end)
+    line = Keyword.fetch!(ctxt, :line)
+    c.(quote line: line do case unquote(val) do unquote(clauses) end end)
   end
 
-  def t([match!(val, cls)], c, b) do
+  def t([match!(val, cls, ctxt)], c, b) do
     var = Macro.unique_var(:x, __MODULE__)
-    t([let!(var, val), match(var, cls)], c, b)
+    t([let!(var, val, ctxt), match(var, cls, ctxt)], c, b)
   end
 
   def t([while(cnd, ce)], c, b) do
@@ -153,8 +154,9 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([do!(e) | [_|_] = ce], c, b) do
+    {_, ctxt, _} = e
     unit = Macro.escape({})
-    t([let!(unit, e) | ce], c, b)
+    t([let!(unit, e, ctxt) | ce], c, b)
   end
 
   # Must it always delay ?
@@ -165,8 +167,9 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([do!(e)], c, b) do
+    {_, ctxt, _} = e
     unit = Macro.escape({})
-    t([let!(unit, src(e, b)), pure(unit)], c, b)
+    t([let!(unit, e, ctxt), pure(unit)], c, b)
   end
 
   def t([other_expr(e) | [_|_] = ce2], c, b) do
