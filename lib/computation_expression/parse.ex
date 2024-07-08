@@ -20,6 +20,10 @@ defmodule ComputationExpression.Parse do
   defmacro do!(expr), do: quote(do: {:cexpr, :do!, [unquote(expr)]})
   defmacro for_(pat, expr, ce), do: quote(do: {:cexpr, :for_, [unquote(pat), unquote(expr), unquote(ce)]})
 
+  def parse({:|>, _ctxt, [left, right]}) do
+    parse(Macro.pipe(left, right, 0))
+  end
+
   def parse({:let, _ctxt, [{:=, _ctxt2, [_p, _e]} = expr]}) do
     let(expr)
   end
