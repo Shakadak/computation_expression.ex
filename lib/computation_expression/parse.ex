@@ -24,6 +24,15 @@ defmodule ComputationExpression.Parse do
     parse(Macro.pipe(left, right, 0))
   end
 
+  # invert stuff like let x = case y do ... end
+  def parse({:let, _ctxt1, [{:=, ctxt2, [p, e]}, block]}) do
+    {name, ctxt3, args} = e
+    e = {name, ctxt3, args ++ [block]}
+    expr = {:=, ctxt2, [p, e]}
+    let(expr)
+  end
+
+
   def parse({:let, _ctxt, [{:=, _ctxt2, [_p, _e]} = expr]}) do
     let(expr)
   end
