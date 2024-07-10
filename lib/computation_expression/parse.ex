@@ -66,21 +66,21 @@ defmodule ComputationExpression.Parse do
   end
 
   def parse({:match, ctxt, [val, [do: cls]]}) do
-    clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
+    clauses = Enum.map(cls, fn {:->, ctxt, [[pi], cei]} ->
       ncei =
         ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
-      [pi, ncei]
+      {pi, ncei, ctxt}
     end)
     match(val, clauses, ctxt)
   end
 
   def parse({:match!, ctxt, [val, [do: cls]]}) do
-    clauses = Enum.map(cls, fn {:->, _, [[pi], cei]} ->
+    clauses = Enum.map(cls, fn {:->, ctxt, [[pi], cei]} ->
       ncei =
         ComputationExpression.normalize_body(cei)
         |> Enum.map(&parse/1)
-      [pi, ncei]
+      {pi, ncei, ctxt}
     end)
     match!(val, clauses, ctxt)
   end

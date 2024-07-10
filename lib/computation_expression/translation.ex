@@ -97,8 +97,8 @@ defmodule ComputationExpression.Translation do
   end
 
   def t([match(val, cls, ctxt)], c, b) do
-    clauses = Enum.flat_map(cls, fn [pi, cei] ->
-      quote do unquote(pi) -> unquote(translate_basic(cei, b)) end
+    clauses = Enum.flat_map(cls, fn {pi, cei, ctxt} ->
+      quote line: Keyword.fetch!(ctxt, :line) do unquote(pi) -> unquote(translate_basic(cei, b)) end
     end)
     line = Keyword.fetch!(ctxt, :line)
     c.(quote line: line do case unquote(val) do unquote(clauses) end end)
